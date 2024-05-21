@@ -22,7 +22,7 @@ in vec2 texCoord;
 
 #define NUM_LAYERS 6
 
-#define STYLE 2  // 0:room,1:bloom,2:glass
+#define STYLE 0  // 0:room,1:bloom,2:glass
 
 vec4 color_layers[NUM_LAYERS];
 float depth_layers[NUM_LAYERS];
@@ -122,14 +122,19 @@ void main() {
 
     fragColor = vec4( texelAccum, 1.0 );
 
-    ivec2 posUV1 = ivec2(floor(OutSize / 2.0));
-    ivec2 posUV2 = ivec2(posUV1.x + 1, posUV1.y);
-    ivec2 posUV3 = ivec2(posUV1.x + 2, posUV1.y);
-    ivec2 rotUV1 = ivec2(posUV1.x, posUV1.y + 1);
-    ivec2 rotUV2 = ivec2(posUV1.x + 1, posUV1.y + 1);
-    ivec2 fovUV = ivec2(posUV1.x + 2, posUV1.y + 1);
+    ivec2 baseUV = ivec2(floor(OutSize / 2.0));
+    ivec2 posXUV1 = baseUV;
+    ivec2 posYUV1 = ivec2(baseUV.x + 1, baseUV.y);
+    ivec2 posZUV1 = ivec2(baseUV.x + 2, baseUV.y);
+    ivec2 rotZUV1 = ivec2(baseUV.x + 3, baseUV.y);
+    // ivec2 rotZUV2 = ivec2(baseUV.x + 3, baseUV.y + 1);
+    // ivec2 rotZUV3 = ivec2(baseUV.x + 3, baseUV.y + 2);
+    ivec2 rotYUV1 = ivec2(baseUV.x + 4, baseUV.y);
+    // ivec2 rotYUV2 = ivec2(baseUV.x + 4, baseUV.y + 1);
+    // ivec2 rotYUV3 = ivec2(baseUV.x + 4, baseUV.y + 2);
+    ivec2 fovUV1 = ivec2(baseUV.x + 5, baseUV.y);
 
-    float halfFovY = texelFetch(DiffuseSampler, fovUV, 0).r * 1.5708;
+    float halfFovY = texelFetch(DiffuseSampler, fovUV1, 0).r * 1.5708;
     float cot = 1.0 / tan(halfFovY);
     float aspect = OutSize.x / OutSize.y;
     float n = 0.05;
@@ -140,30 +145,40 @@ void main() {
                 0.0, 0.0, -2.0 * f * n / (f - n), 0.0);
 
     vec3 pos, prePos;
-    vec3 posX = round(texelFetch(DiffuseSampler, posUV1, 0).rgb * 255.0);
+    vec3 posX = round(texelFetch(DiffuseSampler, posXUV1, 0).rgb * 255.0);
     pos.x = posX.x * 255.0 + posX.y + posX.z / 255.0 - 32768.0;
-    vec3 posY = round(texelFetch(DiffuseSampler, posUV2, 0).rgb * 255.0);
+    vec3 posY = round(texelFetch(DiffuseSampler, posYUV1, 0).rgb * 255.0);
     pos.y = posY.x * 255.0 + posY.y + posY.z / 255.0 - 32768.0 + 1.62;
-    vec3 posZ = round(texelFetch(DiffuseSampler, posUV3, 0).rgb * 255.0);
+    vec3 posZ = round(texelFetch(DiffuseSampler, posZUV1, 0).rgb * 255.0);
     pos.z = posZ.x * 255.0 + posZ.y + posZ.z / 255.0 - 32768.0;
-    // posX = round(texelFetch(PreviewDiffuseSampler, posUV1, 0).rgb * 255.0);
+    // posX = round(texelFetch(PreviewDiffuseSampler, posXUV1, 0).rgb * 255.0);
     // prePos.x = posX.x * 255.0 + posX.y + posX.z / 255.0 - 32768.0;
-    // posY = round(texelFetch(PreviewDiffuseSampler, posUV2, 0).rgb * 255.0);
+    // posY = round(texelFetch(PreviewDiffuseSampler, posYUV1, 0).rgb * 255.0);
     // prePos.y = posY.x * 255.0 + posY.y + posY.z / 255.0 - 32768.0 + 1.62;
-    // posZ = round(texelFetch(PreviewDiffuseSampler, posUV3, 0).rgb * 255.0);
+    // posZ = round(texelFetch(PreviewDiffuseSampler, posZUV1, 0).rgb * 255.0);
     // prePos.z = posZ.x * 255.0 + posZ.y + posZ.z / 255.0 - 32768.0;
     // pos = mix(prePos, pos, fract(Time * 20.0));
 
-    vec3 viewZ = texelFetch(DiffuseSampler, rotUV1, 0).rgb * 2.0 - 1.0;
-    vec3 viewY = texelFetch(DiffuseSampler, rotUV2, 0).rgb * 2.0 - 1.0;
+    // vec3 byte1 = round(texelFetch(DiffuseSampler, rotZUV1, 0).rgb * 255.0);
+    // vec3 byte2 = round(texelFetch(DiffuseSampler, rotZUV2, 0).rgb * 255.0);
+    // vec3 byte3 = round(texelFetch(DiffuseSampler, rotZUV3, 0).rgb * 255.0);
+    // vec3 viewZ = (byte1 * 65536.0 + byte2 * 256.0 + byte3) / 65536.0 / 255.0;
+    // viewZ = viewZ * 2.0 - 1.0;
+    vec3 viewZ = texelFetch(DiffuseSampler, rotZUV1, 0).rgb * 2.0 - 1.0;
+    // byte1 = round(texelFetch(DiffuseSampler, rotYUV1, 0).rgb * 255.0);
+    // byte2 = round(texelFetch(DiffuseSampler, rotYUV2, 0).rgb * 255.0);
+    // byte3 = round(texelFetch(DiffuseSampler, rotYUV3, 0).rgb * 255.0);
+    // vec3 viewY = (byte1 * 65536.0 + byte2 * 256.0 + byte3) / 65536.0 / 255.0;
+    // viewY = viewY * 2.0 - 1.0;
+    vec3 viewY = texelFetch(DiffuseSampler, rotYUV1, 0).rgb * 2.0 - 1.0;
     vec3 viewX = cross(viewY, viewZ);
     mat3 viewInv = mat3(viewX, viewY, viewZ);
     mat3 view = transpose(viewInv);
     vec3 viewPos = screen2view(texCoord, depthAccum);
     // vec3 worldPos = viewInv * viewPos;
 
-	vec3 center = screen2view(vec2(0.5, 0.5), texture(DiffuseDepthSampler, vec2(0.5, 0.5)).r);
-    // vec3 center = view * (vec3(46.0, 66.0, 4.0) - pos);
+	// vec3 center = screen2view(vec2(0.5, 0.5), texture(DiffuseDepthSampler, vec2(0.5, 0.5)).r);
+    vec3 center = view * (vec3(46.0, 66.0, 4.0) - pos);
     float radius = 8.0;
 	vec4 tintColor = vec4(0.5, 0.8, 1.0, 0.0);
 	float fresnel = 0.8;
