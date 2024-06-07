@@ -6,9 +6,7 @@
         "particles",
         "clouds",
         "weather",
-        "final",
-        "preview",
-        "swap"
+        "final"
     ],
     "passes": [
         {
@@ -45,34 +43,22 @@
                     "id": "particles:depth"
                 },
                 {
+                    "name": "CloudsSampler",
+                    "id": "clouds"
+                },
+                {
+                    "name": "CloudsDepthSampler",
+                    "id": "clouds:depth"
+                },
+                {
                     "name": "WeatherSampler",
                     "id": "weather"
                 },
                 {
                     "name": "WeatherDepthSampler",
                     "id": "weather:depth"
-                },
-                {
-                    "name": "PreviewDiffuseSampler",
-                    "id": "preview"
                 }
             ]
-        },
-        {
-            "name": "preview",
-            "intarget": "minecraft:main",
-            "outtarget": "swap",
-            "auxtargets": [
-                {
-                    "name": "PreviewDiffuseSampler",
-                    "id": "preview"
-                }
-            ]
-        },
-        {
-            "name": "blit",
-            "intarget": "swap",
-            "outtarget": "preview"
         },
         {
             "name": "blit",

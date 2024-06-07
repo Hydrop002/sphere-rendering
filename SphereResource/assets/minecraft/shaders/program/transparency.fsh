@@ -1,4 +1,4 @@
-#version 150
+#version 400
 
 uniform sampler2D DiffuseSampler;
 uniform sampler2D DiffuseDepthSampler;
@@ -10,9 +10,8 @@ uniform sampler2D ParticlesSampler;
 uniform sampler2D ParticlesDepthSampler;
 uniform sampler2D WeatherSampler;
 uniform sampler2D WeatherDepthSampler;
-// uniform sampler2D CloudsSampler;
-// uniform sampler2D CloudsDepthSampler;
-uniform sampler2D PreviewDiffuseSampler;
+uniform sampler2D CloudsSampler;
+uniform sampler2D CloudsDepthSampler;
 
 uniform mat4 ProjMat;
 uniform vec2 OutSize;
@@ -22,7 +21,7 @@ in vec2 texCoord;
 
 #define NUM_LAYERS 6
 
-#define STYLE 1  // 0:room,1:bloom,2:glass
+#define STYLE 0  // 0:room,1:bloom,2:glass
 
 vec4 color_layers[NUM_LAYERS];
 float depth_layers[NUM_LAYERS];
@@ -112,7 +111,7 @@ void main() {
     try_insert( texture( ItemEntitySampler, texCoord ), texture( ItemEntityDepthSampler, texCoord ).r );
     try_insert( texture( ParticlesSampler, texCoord ), texture( ParticlesDepthSampler, texCoord ).r );
     try_insert( texture( WeatherSampler, texCoord ), texture( WeatherDepthSampler, texCoord ).r );
-    // try_insert( texture( CloudsSampler, texCoord ), texture( CloudsDepthSampler, texCoord ).r );
+    try_insert( texture( CloudsSampler, texCoord ), texture( CloudsDepthSampler, texCoord ).r );
 
     vec3 texelAccum = color_layers[0].rgb;
     float depthAccum = depth_layers[active_layers - 1];
@@ -123,19 +122,102 @@ void main() {
     fragColor = vec4( texelAccum, 1.0 );
 
     ivec2 baseUV = ivec2(floor(OutSize / 2.0));
-    ivec2 posXUV1 = baseUV;
-    ivec2 posYUV1 = ivec2(baseUV.x + 1, baseUV.y);
-    ivec2 posZUV1 = ivec2(baseUV.x + 2, baseUV.y);
-    ivec2 rotZUV1 = ivec2(baseUV.x + 3, baseUV.y);
-    // ivec2 rotZUV2 = ivec2(baseUV.x + 3, baseUV.y + 1);
-    // ivec2 rotZUV3 = ivec2(baseUV.x + 3, baseUV.y + 2);
-    ivec2 rotYUV1 = ivec2(baseUV.x + 4, baseUV.y);
-    // ivec2 rotYUV2 = ivec2(baseUV.x + 4, baseUV.y + 1);
-    // ivec2 rotYUV3 = ivec2(baseUV.x + 4, baseUV.y + 2);
-    ivec2 fovUV1 = ivec2(baseUV.x + 5, baseUV.y);
+    ivec2 posUV1 = baseUV;
+    ivec2 posUV2 = ivec2(baseUV.x, baseUV.y + 1);
+    ivec2 posUV3 = ivec2(baseUV.x, baseUV.y + 2);
+    ivec2 posUV4 = ivec2(baseUV.x, baseUV.y + 3);
+    ivec2 rotZUV1 = ivec2(baseUV.x + 1, baseUV.y);
+    ivec2 rotZUV2 = ivec2(baseUV.x + 1, baseUV.y + 1);
+    ivec2 rotZUV3 = ivec2(baseUV.x + 1, baseUV.y + 2);
+    ivec2 rotZUV4 = ivec2(baseUV.x + 1, baseUV.y + 3);
+    ivec2 rotYUV1 = ivec2(baseUV.x + 2, baseUV.y);
+    ivec2 rotYUV2 = ivec2(baseUV.x + 2, baseUV.y + 1);
+    ivec2 rotYUV3 = ivec2(baseUV.x + 2, baseUV.y + 2);
+    ivec2 rotYUV4 = ivec2(baseUV.x + 2, baseUV.y + 3);
+    ivec2 miscUV1 = ivec2(baseUV.x + 3, baseUV.y);
+    ivec2 miscUV2 = ivec2(baseUV.x + 3, baseUV.y + 1);
+    ivec2 miscUV3 = ivec2(baseUV.x + 3, baseUV.y + 2);
 
-    float halfFovY = texelFetch(DiffuseSampler, fovUV1, 0).r * 1.5708;
-    float cot = 1.0 / tan(halfFovY);
+    if (texelFetch(DiffuseSampler, ivec2(baseUV.x - 1, baseUV.y), 0) != vec4(0.0, 0.0, 0.0, 1.0)) return;
+
+    uvec3 u1, u2, u3, u4;
+    uint ux, uy, uz;
+
+    vec3 pos;
+    u1 = uvec3(texelFetch(DiffuseSampler, posUV1, 0).rgb * 255.0);
+    u2 = uvec3(texelFetch(DiffuseSampler, posUV2, 0).rgb * 255.0);
+    u3 = uvec3(texelFetch(DiffuseSampler, posUV3, 0).rgb * 255.0);
+    u4 = uvec3(texelFetch(DiffuseSampler, posUV4, 0).rgb * 255.0);
+    ux = bitfieldInsert(ux, u1.r, 0, 8);
+    ux = bitfieldInsert(ux, u1.g, 8, 8);
+    ux = bitfieldInsert(ux, u1.b, 16, 8);
+    ux = bitfieldInsert(ux, u2.r, 24, 8);
+    pos.x = uintBitsToFloat(ux);
+    uy = bitfieldInsert(uy, u2.g, 0, 8);
+    uy = bitfieldInsert(uy, u2.b, 8, 8);
+    uy = bitfieldInsert(uy, u3.r, 16, 8);
+    uy = bitfieldInsert(uy, u3.g, 24, 8);
+    pos.y = uintBitsToFloat(uy);
+    uz = bitfieldInsert(uz, u3.b, 0, 8);
+    uz = bitfieldInsert(uz, u4.r, 8, 8);
+    uz = bitfieldInsert(uz, u4.g, 16, 8);
+    uz = bitfieldInsert(uz, u4.b, 24, 8);
+    pos.z = uintBitsToFloat(uz);
+    vec3 viewZ;
+    u1 = uvec3(texelFetch(DiffuseSampler, rotZUV1, 0).rgb * 255.0);
+    u2 = uvec3(texelFetch(DiffuseSampler, rotZUV2, 0).rgb * 255.0);
+    u3 = uvec3(texelFetch(DiffuseSampler, rotZUV3, 0).rgb * 255.0);
+    u4 = uvec3(texelFetch(DiffuseSampler, rotZUV4, 0).rgb * 255.0);
+    ux = bitfieldInsert(ux, u1.r, 0, 8);
+    ux = bitfieldInsert(ux, u1.g, 8, 8);
+    ux = bitfieldInsert(ux, u1.b, 16, 8);
+    ux = bitfieldInsert(ux, u2.r, 24, 8);
+    viewZ.x = uintBitsToFloat(ux);
+    uy = bitfieldInsert(uy, u2.g, 0, 8);
+    uy = bitfieldInsert(uy, u2.b, 8, 8);
+    uy = bitfieldInsert(uy, u3.r, 16, 8);
+    uy = bitfieldInsert(uy, u3.g, 24, 8);
+    viewZ.y = uintBitsToFloat(uy);
+    uz = bitfieldInsert(uz, u3.b, 0, 8);
+    uz = bitfieldInsert(uz, u4.r, 8, 8);
+    uz = bitfieldInsert(uz, u4.g, 16, 8);
+    uz = bitfieldInsert(uz, u4.b, 24, 8);
+    viewZ.z = uintBitsToFloat(uz);
+    vec3 viewY;
+    u1 = uvec3(texelFetch(DiffuseSampler, rotYUV1, 0).rgb * 255.0);
+    u2 = uvec3(texelFetch(DiffuseSampler, rotYUV2, 0).rgb * 255.0);
+    u3 = uvec3(texelFetch(DiffuseSampler, rotYUV3, 0).rgb * 255.0);
+    u4 = uvec3(texelFetch(DiffuseSampler, rotYUV4, 0).rgb * 255.0);
+    ux = bitfieldInsert(ux, u1.r, 0, 8);
+    ux = bitfieldInsert(ux, u1.g, 8, 8);
+    ux = bitfieldInsert(ux, u1.b, 16, 8);
+    ux = bitfieldInsert(ux, u2.r, 24, 8);
+    viewY.x = uintBitsToFloat(ux);
+    uy = bitfieldInsert(uy, u2.g, 0, 8);
+    uy = bitfieldInsert(uy, u2.b, 8, 8);
+    uy = bitfieldInsert(uy, u3.r, 16, 8);
+    uy = bitfieldInsert(uy, u3.g, 24, 8);
+    viewY.y = uintBitsToFloat(uy);
+    uz = bitfieldInsert(uz, u3.b, 0, 8);
+    uz = bitfieldInsert(uz, u4.r, 8, 8);
+    uz = bitfieldInsert(uz, u4.g, 16, 8);
+    uz = bitfieldInsert(uz, u4.b, 24, 8);
+    viewY.z = uintBitsToFloat(uz);
+    vec3 viewX = cross(viewY, viewZ);
+    u1 = uvec3(texelFetch(DiffuseSampler, miscUV1, 0).rgb * 255.0);
+    u2 = uvec3(texelFetch(DiffuseSampler, miscUV2, 0).rgb * 255.0);
+    u3 = uvec3(texelFetch(DiffuseSampler, miscUV3, 0).rgb * 255.0);
+    ux = bitfieldInsert(ux, u1.r, 0, 8);
+    ux = bitfieldInsert(ux, u1.g, 8, 8);
+    ux = bitfieldInsert(ux, u1.b, 16, 8);
+    ux = bitfieldInsert(ux, u2.r, 24, 8);
+    float cot = uintBitsToFloat(ux);
+    uy = bitfieldInsert(uy, u2.g, 0, 8);
+    uy = bitfieldInsert(uy, u2.b, 8, 8);
+    uy = bitfieldInsert(uy, u3.r, 16, 8);
+    uy = bitfieldInsert(uy, u3.g, 24, 8);
+    float time = uintBitsToFloat(uy);
+
     float aspect = OutSize.x / OutSize.y;
     float n = 0.05;
     float f = 768.0;
@@ -144,44 +226,15 @@ void main() {
                 0.0, 0.0, -(f + n) / (f - n), -1.0,
                 0.0, 0.0, -2.0 * f * n / (f - n), 0.0);
 
-    vec3 pos, prePos;
-    vec3 posX = round(texelFetch(DiffuseSampler, posXUV1, 0).rgb * 255.0);
-    pos.x = posX.x * 255.0 + posX.y + posX.z / 255.0 - 32768.0;
-    vec3 posY = round(texelFetch(DiffuseSampler, posYUV1, 0).rgb * 255.0);
-    pos.y = posY.x * 255.0 + posY.y + posY.z / 255.0 - 32768.0 + 1.62;
-    vec3 posZ = round(texelFetch(DiffuseSampler, posZUV1, 0).rgb * 255.0);
-    pos.z = posZ.x * 255.0 + posZ.y + posZ.z / 255.0 - 32768.0;
-    // posX = round(texelFetch(PreviewDiffuseSampler, posXUV1, 0).rgb * 255.0);
-    // prePos.x = posX.x * 255.0 + posX.y + posX.z / 255.0 - 32768.0;
-    // posY = round(texelFetch(PreviewDiffuseSampler, posYUV1, 0).rgb * 255.0);
-    // prePos.y = posY.x * 255.0 + posY.y + posY.z / 255.0 - 32768.0 + 1.62;
-    // posZ = round(texelFetch(PreviewDiffuseSampler, posZUV1, 0).rgb * 255.0);
-    // prePos.z = posZ.x * 255.0 + posZ.y + posZ.z / 255.0 - 32768.0;
-    // pos = mix(prePos, pos, fract(Time * 20.0));
-
-    // vec3 byte1 = round(texelFetch(DiffuseSampler, rotZUV1, 0).rgb * 255.0);
-    // vec3 byte2 = round(texelFetch(DiffuseSampler, rotZUV2, 0).rgb * 255.0);
-    // vec3 byte3 = round(texelFetch(DiffuseSampler, rotZUV3, 0).rgb * 255.0);
-    // vec3 viewZ = (byte1 * 65536.0 + byte2 * 256.0 + byte3) / 65536.0 / 255.0;
-    // viewZ = viewZ * 2.0 - 1.0;
-    vec3 viewZ = texelFetch(DiffuseSampler, rotZUV1, 0).rgb * 2.0 - 1.0;
-    // byte1 = round(texelFetch(DiffuseSampler, rotYUV1, 0).rgb * 255.0);
-    // byte2 = round(texelFetch(DiffuseSampler, rotYUV2, 0).rgb * 255.0);
-    // byte3 = round(texelFetch(DiffuseSampler, rotYUV3, 0).rgb * 255.0);
-    // vec3 viewY = (byte1 * 65536.0 + byte2 * 256.0 + byte3) / 65536.0 / 255.0;
-    // viewY = viewY * 2.0 - 1.0;
-    vec3 viewY = texelFetch(DiffuseSampler, rotYUV1, 0).rgb * 2.0 - 1.0;
-    vec3 viewX = cross(viewY, viewZ);
     mat3 viewInv = mat3(viewX, viewY, viewZ);
     mat3 view = transpose(viewInv);
     vec3 viewPos = screen2view(texCoord, depthAccum);
     // vec3 worldPos = viewInv * viewPos;
 
-    // vec3 center = screen2view(vec2(0.5, 0.5), texture(DiffuseDepthSampler, vec2(0.5, 0.5)).r);
-    vec3 center = view * (vec3(46.0, 66.0, 4.0) - pos);
-    float radius = 32.0;
-    vec4 tintColor = vec4(1.0, 0.5, 0.1, 1.0);
-    float fresnel = -0.6;
+    vec3 center = view * pos;
+    float radius = 2.0 * time;
+    vec4 tintColor = vec4(0.5, 0.8, 1.0, 1.0);
+    float fresnel = 0.5;
 
     #if STYLE == 1
     vec4 lightColor = vec4(1.0, 0.5, 0.1, 1.0);
@@ -275,5 +328,5 @@ void main() {
         #endif
     }
     fragColor.a = 1.0;
-    // if (gl_FragCoord.x < 100.0) fragColor = vec4(posX / 255.0, 1.0);
+    // if (gl_FragCoord.x < 100.0) fragColor = vec4(pos, 1.0);
 }

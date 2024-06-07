@@ -1,14 +1,14 @@
-#version 150
+#version 400
 
 uniform vec4 ColorModulator;
 uniform vec2 ScreenSize;
 uniform mat4 ModelViewMat;
 uniform mat4 ProjMat;
+uniform float GameTime;
 
 in vec4 vertexColor;
-in float marker1;
-in float marker2;
-in float marker3;
+in float marker;
+in vec3 pos;
 
 out vec4 fragColor;
 
@@ -21,91 +21,136 @@ void main() {
 
     vec2 uv = floor(gl_FragCoord.xy);
     vec2 baseUV = floor(ScreenSize / 2.0);
-    vec2 posXUV1 = baseUV;
-    vec2 posYUV1 = vec2(baseUV.x + 1.0, baseUV.y);
-    vec2 posZUV1 = vec2(baseUV.x + 2.0, baseUV.y);
-    vec2 rotZUV1 = vec2(baseUV.x + 3.0, baseUV.y);
-    // vec2 rotZUV2 = vec2(baseUV.x + 3.0, baseUV.y + 1.0);
-    // vec2 rotZUV3 = vec2(baseUV.x + 3.0, baseUV.y + 2.0);
-    vec2 rotYUV1 = vec2(baseUV.x + 4.0, baseUV.y);
-    // vec2 rotYUV2 = vec2(baseUV.x + 4.0, baseUV.y + 1.0);
-    // vec2 rotYUV3 = vec2(baseUV.x + 4.0, baseUV.y + 2.0);
-    vec2 fovUV1 = vec2(baseUV.x + 5.0, baseUV.y);
-    if (uv == posXUV1) {  // posX use 24 bits
-        if (marker1 > 0.5)
-            fragColor = vec4(vertexColor.rgb, 1.0);
-        else
-            discard;
-    } else if (uv == posYUV1) {  // posY use 24 bits
-        if (marker2 > 0.5)
-            fragColor = vec4(vertexColor.rgb, 1.0);
-        else
-            discard;
-    } else if (uv == posZUV1) {  // posZ use 24 bits
-        if (marker3 > 0.5)
-            fragColor = vec4(vertexColor.rgb, 1.0);
-        else
-            discard;
-    } else if (uv == rotZUV1) {  // rotX use 24 bits
-        if (marker1 > 0.5) {
-            vec3 viewZ = vec3(ModelViewMat[0].z, ModelViewMat[1].z, ModelViewMat[2].z);
-            viewZ = (viewZ + 1.0) / 2.0;
-            viewZ = floor(viewZ * 255.0) / 255.0;
-            fragColor = vec4(viewZ, 1.0);
+    vec2 posUV1 = baseUV;
+    vec2 posUV2 = vec2(baseUV.x, baseUV.y + 1.0);
+    vec2 posUV3 = vec2(baseUV.x, baseUV.y + 2.0);
+    vec2 posUV4 = vec2(baseUV.x, baseUV.y + 3.0);
+    vec2 rotZUV1 = vec2(baseUV.x + 1.0, baseUV.y);
+    vec2 rotZUV2 = vec2(baseUV.x + 1.0, baseUV.y + 1.0);
+    vec2 rotZUV3 = vec2(baseUV.x + 1.0, baseUV.y + 2.0);
+    vec2 rotZUV4 = vec2(baseUV.x + 1.0, baseUV.y + 3.0);
+    vec2 rotYUV1 = vec2(baseUV.x + 2.0, baseUV.y);
+    vec2 rotYUV2 = vec2(baseUV.x + 2.0, baseUV.y + 1.0);
+    vec2 rotYUV3 = vec2(baseUV.x + 2.0, baseUV.y + 2.0);
+    vec2 rotYUV4 = vec2(baseUV.x + 2.0, baseUV.y + 3.0);
+    vec2 miscUV1 = vec2(baseUV.x + 3.0, baseUV.y);
+    vec2 miscUV2 = vec2(baseUV.x + 3.0, baseUV.y + 1.0);
+    vec2 miscUV3 = vec2(baseUV.x + 3.0, baseUV.y + 2.0);
+    if (uv.x == posUV1.x) {
+        uint ux = floatBitsToUint(pos.x);
+        uint uy = floatBitsToUint(pos.y);
+        uint uz = floatBitsToUint(pos.z);
+        vec3 c;
+        if (uv.y == posUV1.y && marker > 0.5) {
+            c.r = float(bitfieldExtract(ux, 0, 8)) / 255.0;
+            c.g = float(bitfieldExtract(ux, 8, 8)) / 255.0;
+            c.b = float(bitfieldExtract(ux, 16, 8)) / 255.0;
+            fragColor = vec4(c, 1.0);
+        } else if (uv.y == posUV2.y && marker > 0.5) {
+            c.r = float(bitfieldExtract(ux, 24, 8)) / 255.0;
+            c.g = float(bitfieldExtract(uy, 0, 8)) / 255.0;
+            c.b = float(bitfieldExtract(uy, 8, 8)) / 255.0;
+            fragColor = vec4(c, 1.0);
+        } else if (uv.y == posUV3.y && marker > 0.5) {
+            c.r = float(bitfieldExtract(uy, 16, 8)) / 255.0;
+            c.g = float(bitfieldExtract(uy, 24, 8)) / 255.0;
+            c.b = float(bitfieldExtract(uz, 0, 8)) / 255.0;
+            fragColor = vec4(c, 1.0);
+        } else if (uv.y == posUV4.y && marker > 0.5) {
+            c.r = float(bitfieldExtract(uz, 8, 8)) / 255.0;
+            c.g = float(bitfieldExtract(uz, 16, 8)) / 255.0;
+            c.b = float(bitfieldExtract(uz, 24, 8)) / 255.0;
+            fragColor = vec4(c, 1.0);
         } else {
             discard;
         }
-    }/* else if (uv == rotZUV2) {
-        if (marker1 > 0.5) {
-            vec3 viewZ = vec3(ModelViewMat[0].z, ModelViewMat[1].z, ModelViewMat[2].z);
-            viewZ = (viewZ + 1.0) / 2.0;
-            viewZ = floor(fract(viewZ * 255.0) * 256.0) / 255.0;
-            fragColor = vec4(viewZ, 1.0);
+    } else if (uv.x == rotZUV1.x) {
+        vec3 viewZ = vec3(ModelViewMat[0].z, ModelViewMat[1].z, ModelViewMat[2].z);
+        uint ux = floatBitsToUint(viewZ.x);
+        uint uy = floatBitsToUint(viewZ.y);
+        uint uz = floatBitsToUint(viewZ.z);
+        vec3 c;
+        if (uv.y == rotZUV1.y && marker > 0.5) {
+            c.r = float(bitfieldExtract(ux, 0, 8)) / 255.0;
+            c.g = float(bitfieldExtract(ux, 8, 8)) / 255.0;
+            c.b = float(bitfieldExtract(ux, 16, 8)) / 255.0;
+            fragColor = vec4(c, 1.0);
+        } else if (uv.y == rotZUV2.y && marker > 0.5) {
+            c.r = float(bitfieldExtract(ux, 24, 8)) / 255.0;
+            c.g = float(bitfieldExtract(uy, 0, 8)) / 255.0;
+            c.b = float(bitfieldExtract(uy, 8, 8)) / 255.0;
+            fragColor = vec4(c, 1.0);
+        } else if (uv.y == rotZUV3.y && marker > 0.5) {
+            c.r = float(bitfieldExtract(uy, 16, 8)) / 255.0;
+            c.g = float(bitfieldExtract(uy, 24, 8)) / 255.0;
+            c.b = float(bitfieldExtract(uz, 0, 8)) / 255.0;
+            fragColor = vec4(c, 1.0);
+        } else if (uv.y == rotZUV4.y && marker > 0.5) {
+            c.r = float(bitfieldExtract(uz, 8, 8)) / 255.0;
+            c.g = float(bitfieldExtract(uz, 16, 8)) / 255.0;
+            c.b = float(bitfieldExtract(uz, 24, 8)) / 255.0;
+            fragColor = vec4(c, 1.0);
         } else {
             discard;
         }
-    } else if (uv == rotZUV3) {
-        if (marker1 > 0.5) {
-            vec3 viewZ = vec3(ModelViewMat[0].z, ModelViewMat[1].z, ModelViewMat[2].z);
-            viewZ = (viewZ + 1.0) / 2.0;
-            viewZ = floor(fract(viewZ * 255.0 * 256.0) * 256.0) / 255.0;
-            fragColor = vec4(viewZ, 1.0);
+    } else if (uv.x == rotYUV1.x) {
+        vec3 viewY = vec3(ModelViewMat[0].y, ModelViewMat[1].y, ModelViewMat[2].y);
+        uint ux = floatBitsToUint(viewY.x);
+        uint uy = floatBitsToUint(viewY.y);
+        uint uz = floatBitsToUint(viewY.z);
+        vec3 c;
+        if (uv.y == rotYUV1.y && marker > 0.5) {
+            c.r = float(bitfieldExtract(ux, 0, 8)) / 255.0;
+            c.g = float(bitfieldExtract(ux, 8, 8)) / 255.0;
+            c.b = float(bitfieldExtract(ux, 16, 8)) / 255.0;
+            fragColor = vec4(c, 1.0);
+        } else if (uv.y == rotYUV2.y && marker > 0.5) {
+            c.r = float(bitfieldExtract(ux, 24, 8)) / 255.0;
+            c.g = float(bitfieldExtract(uy, 0, 8)) / 255.0;
+            c.b = float(bitfieldExtract(uy, 8, 8)) / 255.0;
+            fragColor = vec4(c, 1.0);
+        } else if (uv.y == rotYUV3.y && marker > 0.5) {
+            c.r = float(bitfieldExtract(uy, 16, 8)) / 255.0;
+            c.g = float(bitfieldExtract(uy, 24, 8)) / 255.0;
+            c.b = float(bitfieldExtract(uz, 0, 8)) / 255.0;
+            fragColor = vec4(c, 1.0);
+        } else if (uv.y == rotYUV4.y && marker > 0.5) {
+            c.r = float(bitfieldExtract(uz, 8, 8)) / 255.0;
+            c.g = float(bitfieldExtract(uz, 16, 8)) / 255.0;
+            c.b = float(bitfieldExtract(uz, 24, 8)) / 255.0;
+            fragColor = vec4(c, 1.0);
         } else {
             discard;
         }
-    }*/ else if (uv == rotYUV1) {  // rotY use 24 bits
-        if (marker1 > 0.5) {
-            vec3 viewY = vec3(ModelViewMat[0].y, ModelViewMat[1].y, ModelViewMat[2].y);
-            fragColor = vec4((viewY + 1.0) / 2.0, 1.0);
+    } else if (uv.x == miscUV1.x) {
+        float cot = ProjMat[1][1];
+        float time = GameTime;
+        time -= fract(dot(round(vertexColor.rgb * 255.0), vec3(65536.0, 256.0, 1.0)) / 24000.0);
+        time *= 1200.0;
+        uint ux = floatBitsToUint(cot);
+        uint uy = floatBitsToUint(time);
+        vec3 c;
+        if (uv.y == miscUV1.y && marker > 0.5) {
+            c.r = float(bitfieldExtract(ux, 0, 8)) / 255.0;
+            c.g = float(bitfieldExtract(ux, 8, 8)) / 255.0;
+            c.b = float(bitfieldExtract(ux, 16, 8)) / 255.0;
+            fragColor = vec4(c, 1.0);
+        } else if (uv.y == miscUV2.y && marker > 0.5) {
+            c.r = float(bitfieldExtract(ux, 24, 8)) / 255.0;
+            c.g = float(bitfieldExtract(uy, 0, 8)) / 255.0;
+            c.b = float(bitfieldExtract(uy, 8, 8)) / 255.0;
+            fragColor = vec4(c, 1.0);
+        } else if (uv.y == miscUV3.y && marker > 0.5) {
+            c.r = float(bitfieldExtract(uy, 16, 8)) / 255.0;
+            c.g = float(bitfieldExtract(uy, 24, 8)) / 255.0;
+            c.b = 0.0;
+            fragColor = vec4(c, 1.0);
         } else {
             discard;
         }
-    }/* else if (uv == rotYUV2) {
-        if (marker1 > 0.5) {
-            vec3 viewY = vec3(ModelViewMat[0].y, ModelViewMat[1].y, ModelViewMat[2].y);
-            viewY = (viewY + 1.0) / 2.0;
-            viewY = floor(fract(viewY * 255.0) * 256.0) / 255.0;
-            fragColor = vec4(viewY, 1.0);
-        } else {
-            discard;
-        }
-    } else if (uv == rotYUV3) {
-        if (marker1 > 0.5) {
-            vec3 viewY = vec3(ModelViewMat[0].y, ModelViewMat[1].y, ModelViewMat[2].y);
-            viewY = (viewY + 1.0) / 2.0;
-            viewY = floor(fract(viewY * 255.0 * 256.0) * 256.0) / 255.0;
-            fragColor = vec4(viewY, 1.0);
-        } else {
-            discard;
-        }
-    }*/ else if (uv == fovUV1) {  // fov use 8 bits
-        if (marker1 > 0.5) {
-            float halfFovY = atan(1.0 / ProjMat[1][1]);
-            fragColor = vec4(vec3(halfFovY / 1.5708), 1.0);
-        } else {
-            discard;
-        }
-    } else if (marker1 > 0.5 || marker2 > 0.5 || marker3 > 0.5) {
+    } else if (uv == vec2(baseUV.x - 1.0, baseUV.y) && marker > 0.5) {  // 开关标识
+        fragColor = vec4(0.0, 0.0, 0.0, 1.0);
+    } else {
         discard;
     }
 }
