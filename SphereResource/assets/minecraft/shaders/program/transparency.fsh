@@ -229,9 +229,10 @@ void main() {
     mat3 viewInv = mat3(viewX, viewY, viewZ);
     mat3 view = transpose(viewInv);
     vec3 viewPos = screen2view(texCoord, depthAccum);
-    // vec3 worldPos = viewInv * viewPos;
+    vec3 worldPos = viewInv * viewPos;
 
-    vec3 center = view * pos;
+    vec3 center = pos;
+    vec3 viewCenter = view * center;
     float radius = 2.0 * time;
     vec4 tintColor = vec4(0.5, 0.8, 1.0, 1.0);
     float fresnel = 0.5;
@@ -240,14 +241,14 @@ void main() {
     vec4 lightColor = vec4(1.0, 0.5, 0.1, 1.0);
     float luminance = 2.0;
     float light = 0.0;
-    float viewDist = length(viewPos);
-    float lumiDist = length(viewPos - center) - radius;
+    float viewDist = length(worldPos);
+    float lumiDist = length(worldPos - center) - radius;
     if (lumiDist > 0.0 && lumiDist < luminance) {
         light = 1.0 - lumiDist / luminance;
     }
     float bloom = 0.0;
     float centerDist = length(center);
-    float angle = acos(dot(viewPos, center) / viewDist / centerDist);
+    float angle = acos(dot(worldPos, center) / viewDist / centerDist);
     float angleMin = asin(radius / centerDist);
     float tanDist = centerDist * cos(angleMin);
     lumiDist = tanDist * tan(angle - angleMin);
@@ -263,11 +264,11 @@ void main() {
     float distortion = 0.2;
     #endif
 
-    vec2 depthNearFar = get_sphere_depth(texCoord, center, radius);
+    vec2 depthNearFar = get_sphere_depth(texCoord, viewCenter, radius);
     if (depthNearFar.x >= 0.0 || depthNearFar.y >= 0.0) {
-        vec2 centerUV = view2screen(center).xy;
+        vec2 centerUV = view2screen(viewCenter).xy;
         if (depthNearFar.x <= depthNearFar.y) {  // cameraOutside
-            vec3 posNear = screen2view(texCoord, depthNearFar.x);
+            vec3 posNear = viewInv * screen2view(texCoord, depthNearFar.x);
             vec3 normalNear = posNear - center;
             float dp = dot(-posNear, normalNear) / length(posNear) / length(normalNear);
             if (fresnel >= 0.0) fresnel *= dp;
@@ -300,7 +301,7 @@ void main() {
                 #endif
             }
         } else {  // cameraInside
-            vec3 posFar = screen2view(texCoord, depthNearFar.y);
+            vec3 posFar = viewInv * screen2view(texCoord, depthNearFar.y);
             vec3 normalFar = posFar - center;
             float dp = dot(posFar, normalFar) / length(posFar) / length(normalFar);
             if (fresnel >= 0.0) fresnel *= dp;
