@@ -21,7 +21,7 @@ in vec2 texCoord;
 
 #define NUM_LAYERS 6
 
-#define STYLE 0  // 0:room,1:bloom,2:glass
+#define STYLE 1  // 0:room,1:bloom,2:glass
 
 vec4 color_layers[NUM_LAYERS];
 float depth_layers[NUM_LAYERS];
@@ -103,24 +103,6 @@ vec2 get_sphere_depth(vec2 uv, vec3 center, float radius) {
 }
 
 void main() {
-    color_layers[0] = texture( DiffuseSampler, texCoord );
-    depth_layers[0] = texture( DiffuseDepthSampler, texCoord ).r;
-    active_layers = 1;
-
-    try_insert( texture( TranslucentSampler, texCoord ), texture( TranslucentDepthSampler, texCoord ).r );
-    try_insert( texture( ItemEntitySampler, texCoord ), texture( ItemEntityDepthSampler, texCoord ).r );
-    try_insert( texture( ParticlesSampler, texCoord ), texture( ParticlesDepthSampler, texCoord ).r );
-    try_insert( texture( WeatherSampler, texCoord ), texture( WeatherDepthSampler, texCoord ).r );
-    try_insert( texture( CloudsSampler, texCoord ), texture( CloudsDepthSampler, texCoord ).r );
-
-    vec3 texelAccum = color_layers[0].rgb;
-    float depthAccum = depth_layers[active_layers - 1];
-    for ( int ii = 1; ii < active_layers; ++ii ) {
-        texelAccum = blend( texelAccum, color_layers[ii] );
-    }
-
-    fragColor = vec4( texelAccum, 1.0 );
-
     ivec2 baseUV = ivec2(floor(OutSize / 2.0));
     ivec2 posUV1 = baseUV;
     ivec2 posUV2 = ivec2(baseUV.x, baseUV.y + 1);
@@ -138,7 +120,7 @@ void main() {
     ivec2 miscUV2 = ivec2(baseUV.x + 3, baseUV.y + 1);
     ivec2 miscUV3 = ivec2(baseUV.x + 3, baseUV.y + 2);
 
-    if (texelFetch(DiffuseSampler, ivec2(baseUV.x - 1, baseUV.y), 0) != vec4(0.0, 0.0, 0.0, 1.0)) return;
+    bool marker = texelFetch(DiffuseSampler, ivec2(baseUV.x - 1, baseUV.y), 0) == vec4(0.0, 0.0, 0.0, 1.0);
 
     uvec3 u1, u2, u3, u4;
     uint ux, uy, uz;
@@ -217,7 +199,36 @@ void main() {
     uy = bitfieldInsert(uy, u3.r, 16, 8);
     uy = bitfieldInsert(uy, u3.g, 24, 8);
     float time = uintBitsToFloat(uy);
+    
+    // Shake
+    vec2 uv = texCoord;
+    if (marker) {
+        float d = length(pos) - 64.0 * sqrt(time / 3.0) - 8.0;
+        uv.y += d < 0.0 ? clamp((1.0 + d / 16.0) * 0.01, 0.0, 0.01) * sin(time * 100.0) : 0.0;
+    }
 
+    // Vanilla
+    color_layers[0] = texture( DiffuseSampler, uv );
+    depth_layers[0] = texture( DiffuseDepthSampler, uv ).r;
+    active_layers = 1;
+
+    try_insert( texture( TranslucentSampler, uv ), texture( TranslucentDepthSampler, uv ).r );
+    try_insert( texture( ItemEntitySampler, uv ), texture( ItemEntityDepthSampler, uv ).r );
+    try_insert( texture( ParticlesSampler, uv ), texture( ParticlesDepthSampler, uv ).r );
+    try_insert( texture( WeatherSampler, uv ), texture( WeatherDepthSampler, uv ).r );
+    try_insert( texture( CloudsSampler, uv ), texture( CloudsDepthSampler, uv ).r );
+
+    vec3 texelAccum = color_layers[0].rgb;
+    float depthAccum = depth_layers[active_layers - 1];
+    for ( int ii = 1; ii < active_layers; ++ii ) {
+        texelAccum = blend( texelAccum, color_layers[ii] );
+    }
+
+    fragColor = vec4( texelAccum, 1.0 );
+
+    if (!marker) return;
+
+    // Space
     float aspect = OutSize.x / OutSize.y;
     float n = 0.05;
     float f = 768.0;
@@ -231,15 +242,22 @@ void main() {
     vec3 viewPos = screen2view(texCoord, depthAccum);
     vec3 worldPos = viewInv * viewPos;
 
+    // CA
+    float contrast = time < 3.0 ? max(1.0 - time * 5.0, 0.0) : (time - 3.0) / 2.0;
+    vec3 midpoint = vec3(0.21763, 0.21763, 0.21763);
+    fragColor.rgb = mix(midpoint, fragColor.rgb, contrast);
+
+    // Sphere
     vec3 center = pos;
     vec3 viewCenter = view * center;
-    float radius = 2.0 * time;
-    vec4 tintColor = vec4(0.5, 0.8, 1.0, 1.0);
-    float fresnel = 0.5;
+    float radius = 64.0 * sqrt(time / 3.0);
+    float fade = 1.0 - max(time - 3.0, 0.0) / 2.0;
+    vec4 tintColor = vec4(fade, fade * 0.5, fade * 0.1, 1.0);
+    float fresnel = -0.6;
 
     #if STYLE == 1
-    vec4 lightColor = vec4(1.0, 0.5, 0.1, 1.0);
-    float luminance = 2.0;
+    vec4 lightColor = vec4(fade, fade * 0.5, fade * 0.1, fade);
+    float luminance = 5.0 * min(time, 1.0);
     float light = 0.0;
     float viewDist = length(worldPos);
     float lumiDist = length(worldPos - center) - radius;
