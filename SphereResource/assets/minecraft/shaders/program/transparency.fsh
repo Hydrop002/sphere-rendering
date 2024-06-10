@@ -21,13 +21,16 @@ in vec2 texCoord;
 
 #define NUM_LAYERS 6
 
-#define STYLE 0  // 0:room,1:bloom,2:glass
+#define STYLE 2  // 0:room,1:bloom,2:glass
 
 vec4 color_layers[NUM_LAYERS];
 float depth_layers[NUM_LAYERS];
 int active_layers = 0;
 
 mat4 proj;
+mat4 projInv;
+mat3 view;
+mat3 viewInv;
 
 out vec4 fragColor;
 
@@ -77,18 +80,23 @@ vec3 view2screen(vec3 pos) {
     return (pos_ndc.xyz + 1.0) / 2.0;
 }
 
+vec3 rand3to3(vec3 pos) {
+	vec3 a = fract(cos(pos.x * 8.3e-3 + pos.y + pos.z * 4.3e-3) * vec3(1.3e3, 4.7e3, 2.9e3));
+	vec3 b = fract(sin(pos.x * 0.3e-3 + pos.y + pos.z * 4.3e-3) * vec3(8.1e3, 1.0e3, 0.1e3));
+	return mix(a, b, 0.5);
+}
+
 vec2 get_sphere_depth(vec2 uv, vec3 center, float radius) {
     vec2 uv_ndc = uv * 2.0 - 1.0;
-    mat4 proj_inv = inverse(proj);
 
-    float a1 = proj_inv[2][0] - proj_inv[2][3] * center.x;
-    float a2 = proj_inv[2][1] - proj_inv[2][3] * center.y;
-    float a3 = proj_inv[2][2] - proj_inv[2][3] * center.z;
-    float a4 = proj_inv[2][3] * radius;
-    float c1 = (proj_inv[0][0] - proj_inv[0][3] * center.x) * uv_ndc.x + (proj_inv[1][0] - proj_inv[1][3] * center.x) * uv_ndc.y + proj_inv[3][0] - proj_inv[3][3] * center.x;
-    float c2 = (proj_inv[0][1] - proj_inv[0][3] * center.y) * uv_ndc.x + (proj_inv[1][1] - proj_inv[1][3] * center.y) * uv_ndc.y + proj_inv[3][1] - proj_inv[3][3] * center.y;
-    float c3 = (proj_inv[0][2] - proj_inv[0][3] * center.z) * uv_ndc.x + (proj_inv[1][2] - proj_inv[1][3] * center.z) * uv_ndc.y + proj_inv[3][2] - proj_inv[3][3] * center.z;
-    float c4 = proj_inv[0][3] * uv_ndc.x * radius + proj_inv[1][3] * uv_ndc.y * radius + proj_inv[3][3] * radius;
+    float a1 = projInv[2][0] - projInv[2][3] * center.x;
+    float a2 = projInv[2][1] - projInv[2][3] * center.y;
+    float a3 = projInv[2][2] - projInv[2][3] * center.z;
+    float a4 = projInv[2][3] * radius;
+    float c1 = (projInv[0][0] - projInv[0][3] * center.x) * uv_ndc.x + (projInv[1][0] - projInv[1][3] * center.x) * uv_ndc.y + projInv[3][0] - projInv[3][3] * center.x;
+    float c2 = (projInv[0][1] - projInv[0][3] * center.y) * uv_ndc.x + (projInv[1][1] - projInv[1][3] * center.y) * uv_ndc.y + projInv[3][1] - projInv[3][3] * center.y;
+    float c3 = (projInv[0][2] - projInv[0][3] * center.z) * uv_ndc.x + (projInv[1][2] - projInv[1][3] * center.z) * uv_ndc.y + projInv[3][2] - projInv[3][3] * center.z;
+    float c4 = projInv[0][3] * uv_ndc.x * radius + projInv[1][3] * uv_ndc.y * radius + projInv[3][3] * radius;
 
     float a = a1 * a1 + a2 * a2 + a3 * a3 - a4 * a4;
     float b = 2.0 * (c1 * a1 + c2 * a2 + c3 * a3 - c4 * a4);
@@ -100,6 +108,100 @@ vec2 get_sphere_depth(vec2 uv, vec3 center, float radius) {
     } else {
         return vec2(-1.0);
     }
+}
+
+vec3 get_sphere_normal(vec3 pos, float time) {
+    mat2 rot = mat2(cos(time), sin(time), -sin(time), cos(time));
+    pos.xz = rot * pos.xz;
+    pos *= 10.0;
+    vec3 base = floor(pos);
+    float minDist = 999.0;
+    vec3 normal;
+    for (int i = -1; i <= 1; ++i) {
+        for (int j = -1; j <= 1; ++j) {
+            for(int k = -1; k <= 1; ++k) {
+                vec3 node = base + vec3(i, j, k);
+                vec3 p = node + rand3to3(node);
+                float dist = distance(pos, p);
+                if (dist < minDist) {
+                    minDist = dist;
+                    normal = normalize(p);
+                }
+            }
+        }
+    }
+    normal.xz = transpose(rot) * normal.xz;
+    return normal;
+}
+
+vec3 raytrace_outside(vec3 viewDir, vec3 posNear, vec3 normalNear, float eta, vec3 center, float radius, float time) {
+    vec3 viewCenter = view * center;
+    vec3 dir = refract(viewDir, normalNear, eta);
+    vec3 stp = dir * 0.1;
+    vec3 worldPos = posNear + stp;
+    vec3 screenPos;
+    bool isDouble = false;
+    int j = 0;
+    for (int i = 0; i < 30; ++i) {
+        screenPos = view2screen(view * worldPos);
+        if (screenPos.x < 0.0 || screenPos.x > 1.0 || screenPos.y < 0.0 || screenPos.y > 1.0) break;
+        float dist = depth2dist(screenPos.z);
+        float depthDiffuse = texture(DiffuseDepthSampler, screenPos.xy).r;
+        float distDiffuse = depth2dist(depthDiffuse);
+        float depthSphere = get_sphere_depth(screenPos.xy, viewCenter, radius).y;
+        float distSphere = depth2dist(depthSphere);
+        float maxErr = length(stp);
+        if (!isDouble && distDiffuse > distSphere && depthSphere > 0.0 && abs(dist - distSphere) < maxErr) {  // 二次折射
+            if (j++ >= 4) {
+                isDouble = true;
+                j = 0;
+                vec3 posFar = viewInv * screen2view(screenPos.xy, depthSphere);
+                // vec3 normalFar = normalize(center - posFar);
+                vec3 normalFar = get_sphere_normal(center - posFar, time / 2.0);
+                dir = refract(dir, normalFar, 1.0 / eta);
+                stp = dir * 0.1;
+                worldPos = posFar + stp;
+                continue;
+            }
+            worldPos -= stp;
+            stp *= 0.1;
+        } else if (distDiffuse < distSphere && abs(dist - distDiffuse) < maxErr) {  // 内部相交
+            if (j++ >= 4) break;
+            worldPos -= stp;
+            stp *= 0.1;
+        } else if (abs(dist - distDiffuse) < maxErr) {  // 外部相交
+            if (j++ >= 4) break;
+            worldPos -= stp;
+            stp *= 0.1;
+        }
+        stp *= 1.2;
+        worldPos += stp;
+    }
+    return screenPos;
+}
+
+vec3 raytrace_inside(vec3 viewDir, vec3 posFar, vec3 normalFar, float eta) {
+    vec3 dir = refract(viewDir, -normalFar, 1.0 / eta);  // todo 全反射情况
+    vec3 stp = dir * 0.1;
+    vec3 worldPos = posFar + stp;
+    vec3 screenPos;
+    int j = 0;
+    for (int i = 0; i < 30; ++i) {
+        screenPos = view2screen(view * worldPos);
+        if (screenPos.x < 0.0 || screenPos.x > 1.0 || screenPos.y < 0.0 || screenPos.y > 1.0) break;
+        float dist = depth2dist(screenPos.z);
+        float depthDiffuse = texture(DiffuseDepthSampler, screenPos.xy).r;
+        float distDiffuse = depth2dist(depthDiffuse);
+        float maxErr = length(stp);
+        if (abs(dist - distDiffuse) < maxErr) {
+            if (j++ >= 4) break;
+            worldPos -= stp;
+            stp *= 0.1;
+        }
+        stp *= 1.2;
+        worldPos += stp;
+    }
+    return screenPos;
 }
 
 void main() {
@@ -225,17 +327,18 @@ void main() {
                 0.0, cot, 0.0, 0.0,
                 0.0, 0.0, -(f + n) / (f - n), -1.0,
                 0.0, 0.0, -2.0 * f * n / (f - n), 0.0);
+    projInv = inverse(proj);
 
-    mat3 viewInv = mat3(viewX, viewY, viewZ);
-    mat3 view = transpose(viewInv);
+    viewInv = mat3(viewX, viewY, viewZ);
+    view = transpose(viewInv);
     vec3 viewPos = screen2view(texCoord, depthAccum);
     vec3 worldPos = viewInv * viewPos;
 
     vec3 center = pos;
     vec3 viewCenter = view * center;
-    float radius = 2.0 * time;
-    vec4 tintColor = vec4(0.5, 0.8, 1.0, 1.0);
-    float fresnel = 0.5;
+    float radius = 1.0;
+    vec4 tintColor = vec4(1.0, 0.95, 1.0, 1.0);
+    float fresnel = 1.0;
 
     #if STYLE == 1
     vec4 lightColor = vec4(1.0, 0.5, 0.1, 1.0);
@@ -261,7 +364,7 @@ void main() {
     }
     light = max(light, bloom) * lightColor.a;
     #elif STYLE == 2
-    float distortion = 0.2;
+    float eta = 0.5504;
     #endif
 
     vec2 depthNearFar = get_sphere_depth(texCoord, viewCenter, radius);
@@ -269,8 +372,9 @@ void main() {
         vec2 centerUV = view2screen(viewCenter).xy;
         if (depthNearFar.x <= depthNearFar.y) {  // cameraOutside
             vec3 posNear = viewInv * screen2view(texCoord, depthNearFar.x);
-            vec3 normalNear = posNear - center;
-            float dp = dot(-posNear, normalNear) / length(posNear) / length(normalNear);
+            // vec3 normalNear = normalize(posNear - center);
+            vec3 normalNear = get_sphere_normal(posNear - center, time / 2.0);
+            float dp = dot(normalize(-posNear), normalNear);
             if (fresnel >= 0.0) fresnel *= dp;
             else fresnel *= dp - 1.0;
             if (depthAccum > depthNearFar.y) {
@@ -280,9 +384,11 @@ void main() {
                 fragColor += mix(vec4(0.0), lightColor, light);
                 fragColor += mix(tintColor * 2.0, vec4(0.0), fresnel);
                 #elif STYLE == 2
-                vec2 bias = normalize((centerUV - texCoord) * OutSize) * OutSize.y / OutSize * (1.0 - dp) * distortion;
-                fragColor = texture(DiffuseSampler, texCoord + bias);
+                vec3 newTexCoord = raytrace_outside(normalize(worldPos), posNear, normalNear, eta, center, radius, time);
+                fragColor = texture(DiffuseSampler, newTexCoord.xy);
                 fragColor *= mix(tintColor * tintColor, vec4(1.0), fresnel);
+                float specular = dot(normalize(normalize(worldPos) + viewInv * normalize(vec3(1.0, -1.0, -0.2))), -normalNear);
+                fragColor = mix(fragColor, vec4(1.0), pow(clamp(specular, 0.0, 1.0), 40.0));
                 #endif
             } else if (depthAccum > depthNearFar.x) {
                 #if STYLE == 0
@@ -291,9 +397,11 @@ void main() {
                 fragColor += mix(vec4(0.0), lightColor, light);
                 fragColor += mix(tintColor, vec4(0.0), fresnel);
                 #elif STYLE == 2
-                vec2 bias = normalize((centerUV - texCoord) * OutSize) * OutSize.y / OutSize * (1.0 - dp) * distortion;
-                fragColor = texture(DiffuseSampler, texCoord + bias);
+                vec3 newTexCoord = raytrace_outside(normalize(worldPos), posNear, normalNear, eta, center, radius, time);
+                fragColor = texture(DiffuseSampler, newTexCoord.xy);
                 fragColor *= mix(tintColor, vec4(1.0), fresnel);
+                float specular = dot(normalize(normalize(worldPos) + viewInv * normalize(vec3(1.0, -1.0, -0.2))), -normalNear);
+                fragColor = mix(fragColor, vec4(1.0), pow(clamp(specular, 0.0, 1.0), 40.0));
                 #endif
             } else {
                 #if STYLE == 1
@@ -302,8 +410,9 @@ void main() {
             }
         } else {  // cameraInside
             vec3 posFar = viewInv * screen2view(texCoord, depthNearFar.y);
-            vec3 normalFar = posFar - center;
-            float dp = dot(posFar, normalFar) / length(posFar) / length(normalFar);
+            // vec3 normalFar = normalize(posFar - center);
+            vec3 normalFar = get_sphere_normal(posFar - center, time / 2.0);
+            float dp = dot(normalize(posFar), normalFar);
             if (fresnel >= 0.0) fresnel *= dp;
             else fresnel *= dp - 1.0;
             if (depthAccum > depthNearFar.y) {
@@ -313,8 +422,8 @@ void main() {
                 fragColor += mix(vec4(0.0), tintColor, tintColor.a * 0.8);
                 fragColor += mix(tintColor, vec4(0.0), fresnel * 0.5);
                 #elif STYLE == 2
-                vec2 bias = normalize((centerUV - texCoord) * OutSize) * OutSize.y / OutSize * (1.0 - dp) * distortion;
-                fragColor = texture(DiffuseSampler, texCoord + bias);
+                vec3 newTexCoord = raytrace_inside(normalize(worldPos), posFar, normalFar, eta);
+                fragColor = texture(DiffuseSampler, newTexCoord.xy);
                 fragColor *= mix(tintColor, vec4(1.0), fresnel * 0.5);
                 #endif
             } else {
